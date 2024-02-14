@@ -8,7 +8,9 @@ import sys
 sys.path.append('efficient-deep-learning/models_cifar100')
 import preact_resnet as pr
 
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# Assuming that we are on a CUDA machine, this should print a CUDA device:
+print(device)
 
 ## Normalization adapted for CIFAR10
 normalize_scratch = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
@@ -61,6 +63,7 @@ trainloader_subset = DataLoader(c10train_subset,batch_size=32,shuffle=True)
 ### You can now use either trainloader (full CIFAR10) or trainloader_subset (subset of CIFAR10) to train your networks.
 
 model = pr.PreActResNet18()
+model.to(device)
 
 n_epochs=2
 
@@ -77,7 +80,7 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
     running_loss = 0.0
     for i, data in enumerate(trainloader_subset, 0): #les minibatchs sont de taille 32
         # get the inputs; data is a list of [inputs, labels]
-        inputs, labels = data
+        inputs, labels = data[0].to(device), data[1].to(device)
 
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -91,11 +94,10 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
                 'net': model.state_dict(),
                 #'hyperparam': hparam_currentvalue
             }
-            torch.save(state, 'bestmodel'+epoch+i+'.pth')
+            torch.save(state, 'bestmodel.pth')
 
         loss.backward()
         optimizer.step()
-        print(i)
         # print statistics
         running_loss += loss.item()
         if i % 100 == 99:    # print every 100 mini-batches
@@ -104,3 +106,16 @@ for epoch in range(n_epochs):  # loop over the dataset multiple times
             running_loss = 0.0
 
 print('Finished Training')
+
+correct = 0
+total = 0
+with torch.no_grad():  # torch.no_grad for TESTING
+    for data in testloader:
+        images, labels = data[0].to(device), data[1].to(device)
+        outputs = model(images)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
+print('Accuracy of the network on the 10000 test images: %d %%' % (
+    100 * correct / total))
